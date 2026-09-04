@@ -26,4 +26,10 @@ class Project extends Model
     {
         return $this->hasMany(StudentRecord::class);
     }
+    // A project can have multiple card generation jobs.
+    // For example, one job for Template 1 and another for Template 2.
+    public function generationJobs(): HasMany
+    {
+        return $this->hasMany(GenerationJob::class);
+    }
 }

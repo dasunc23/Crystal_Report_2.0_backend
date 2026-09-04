@@ -47,4 +47,9 @@ class Template extends Model
     {
         return $this->hasOne(DataMapping::class);
     }
+    // A template can be used for multiple generation jobs over time.
+    public function generationJobs(): HasMany
+    {
+        return $this->hasMany(GenerationJob::class);
+}
 }
