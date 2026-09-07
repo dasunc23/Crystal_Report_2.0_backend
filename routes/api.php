@@ -2,6 +2,10 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProjectController;
+use App\Http\Controllers\Api\TemplateController;
+use App\Http\Controllers\Api\TemplateElementController;
+use App\Http\Controllers\Api\DataMappingController;
+use App\Http\Controllers\Api\StudentImportController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -25,4 +29,46 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Project management APIs.
     Route::apiResource('projects', ProjectController::class);
+
+    // Template APIs belonging to a specific project.
+    Route::apiResource(
+        'projects.templates',
+        TemplateController::class
+    )->except(['create', 'edit']);
+
+    Route::apiResource(
+    'templates.elements',
+    TemplateElementController::class
+    )->except(['create', 'edit']);
+
+    // Data mapping APIs for a specific template element.
+    Route::get(
+        'elements/{element}/mapping',
+        [DataMappingController::class, 'show']
+    );
+
+    Route::post(
+        'elements/{element}/mapping',
+        [DataMappingController::class, 'store']
+    );
+
+    Route::put(
+        'elements/{element}/mapping',
+        [DataMappingController::class, 'update']
+    );
+
+    Route::delete(
+        'elements/{element}/mapping',
+        [DataMappingController::class, 'destroy']
+    );
+
+    Route::post(
+    'projects/{project}/students/preview',
+    [StudentImportController::class, 'preview']
+    );
+
+    Route::post(
+    'projects/{project}/students/import',
+    [StudentImportController::class, 'import']
+    );
 });
