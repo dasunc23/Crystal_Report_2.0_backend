@@ -5,15 +5,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class TemplateElement extends Model
 {
     use HasFactory;
 
-    // Tell Laravel to use our custom table name.
+    // Custom table name used by this application.
     protected $table = 'ecls_template_elements';
 
-    // These fields can be safely mass assigned.
     protected $fillable = [
         'template_id',
         'side',
@@ -29,7 +29,6 @@ class TemplateElement extends Model
         'z_index',
     ];
 
-    // Automatically convert database values into the appropriate PHP types.
     protected $casts = [
         'x_mm' => 'decimal:2',
         'y_mm' => 'decimal:2',
@@ -40,9 +39,22 @@ class TemplateElement extends Model
         'z_index' => 'integer',
     ];
 
-    // Each element belongs to one card template.
+    /**
+     * The template that owns this element.
+     */
     public function template(): BelongsTo
     {
         return $this->belongsTo(Template::class);
+    }
+
+    /**
+     * Each visual element can have one data mapping.
+     *
+     * Example:
+     * Student Name element → student_name Excel column.
+     */
+    public function dataMapping(): HasOne
+    {
+        return $this->hasOne(DataMapping::class);
     }
 }
