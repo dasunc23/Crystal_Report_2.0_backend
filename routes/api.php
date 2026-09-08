@@ -6,6 +6,8 @@ use App\Http\Controllers\Api\TemplateController;
 use App\Http\Controllers\Api\TemplateElementController;
 use App\Http\Controllers\Api\DataMappingController;
 use App\Http\Controllers\Api\StudentImportController;
+use App\Http\Controllers\Api\StudentPhotoController;
+use App\Http\Controllers\Api\TemplateDesignController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -70,5 +72,23 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post(
     'projects/{project}/students/import',
     [StudentImportController::class, 'import']
+    );
+
+    // Student photo upload and barcode matching.
+    Route::post(
+        'projects/{project}/students/photos',
+        [StudentPhotoController::class, 'upload']
+    );
+
+    // Get the current photo matching summary.
+    Route::get(
+        'projects/{project}/students/photos/summary',
+        [StudentPhotoController::class, 'summary']
+    );
+
+    // Upload the locked front/back base designs for a template.
+    Route::post(
+        'projects/{project}/templates/{template}/design',
+        [TemplateDesignController::class, 'upload']
     );
 });
