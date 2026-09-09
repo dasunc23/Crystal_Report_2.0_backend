@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\DataMappingController;
 use App\Http\Controllers\Api\StudentImportController;
 use App\Http\Controllers\Api\StudentPhotoController;
 use App\Http\Controllers\Api\TemplateDesignController;
+use App\Http\Controllers\Api\TemplateConfigurationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -90,5 +91,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post(
         'projects/{project}/templates/{template}/design',
         [TemplateDesignController::class, 'upload']
+    );
+
+    // Return the complete configuration required by the visual editor.
+    Route::get(
+        'projects/{project}/templates/{template}/configuration',
+        [TemplateConfigurationController::class, 'show']
     );
 });
