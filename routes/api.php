@@ -9,6 +9,11 @@ use App\Http\Controllers\Api\StudentImportController;
 use App\Http\Controllers\Api\StudentPhotoController;
 use App\Http\Controllers\Api\TemplateDesignController;
 use App\Http\Controllers\Api\TemplateConfigurationController;
+use App\Http\Controllers\Api\TemplateDesignPreviewController;
+use App\Http\Controllers\Api\TemplateDimensionController;
+use App\Http\Controllers\Api\StudentRecordController;
+use App\Http\Controllers\Api\CardPreviewController;
+use App\Http\Controllers\Api\CardRenderingController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -97,5 +102,49 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get(
         'projects/{project}/templates/{template}/configuration',
         [TemplateConfigurationController::class, 'show']
+    );
+
+    Route::put(
+    '/projects/{project}/templates/{template}/configuration',
+    [TemplateConfigurationController::class, 'update']
+    );
+
+    // Securely retrieve a template's front/back design.
+    Route::get(
+        'projects/{project}/templates/{template}/design/{side}',
+        [TemplateDesignPreviewController::class, 'show']
+    );
+
+    // Update the physical dimensions of a card template.
+    Route::put(
+        'projects/{project}/templates/{template}/dimensions',
+        [TemplateDimensionController::class, 'update']
+    );
+
+    // Retrieve paginated student records for a project.
+    Route::get(
+        'projects/{project}/students',
+        [StudentRecordController::class, 'index']
+    );
+
+    // Retrieve one student record for a project.
+    Route::get(
+        'projects/{project}/students/{student}',
+        [StudentRecordController::class, 'show']
+    );
+
+    Route::get(
+    '/projects/{project}/students/{student}/photo',
+    [StudentRecordController::class, 'photo']
+    );
+
+    Route::get(
+    '/projects/{project}/templates/{template}/students/{student}/preview',
+    [CardPreviewController::class, 'preview']
+    );
+
+    Route::get(
+    '/projects/{project}/templates/{template}/students/{student}/render',
+    [CardRenderingController::class, 'render']
     );
 });
