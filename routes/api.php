@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\TemplateDimensionController;
 use App\Http\Controllers\Api\StudentRecordController;
 use App\Http\Controllers\Api\CardPreviewController;
 use App\Http\Controllers\Api\CardRenderingController;
+use App\Http\Controllers\Api\A4PrintSheetController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -146,5 +147,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get(
     '/projects/{project}/templates/{template}/students/{student}/render',
     [CardRenderingController::class, 'render']
+    );
+
+    Route::post(
+    '/projects/{project}/templates/{template}/print-sheet',
+    [A4PrintSheetController::class, 'render']
+    );
+
+    Route::post(
+        '/projects/{project}/templates/{template}/print-sheet/layout',
+        [A4PrintSheetController::class, 'layout']
     );
 });
