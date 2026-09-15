@@ -1,30 +1,46 @@
 <?php
 
+use App\Http\Controllers\Api\A4PrintSheetController;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\ProjectController;
-use App\Http\Controllers\Api\TemplateController;
-use App\Http\Controllers\Api\TemplateElementController;
-use App\Http\Controllers\Api\DataMappingController;
-use App\Http\Controllers\Api\StudentImportController;
-use App\Http\Controllers\Api\StudentPhotoController;
-use App\Http\Controllers\Api\TemplateDesignController;
-use App\Http\Controllers\Api\TemplateConfigurationController;
-use App\Http\Controllers\Api\TemplateDesignPreviewController;
-use App\Http\Controllers\Api\TemplateDimensionController;
-use App\Http\Controllers\Api\StudentRecordController;
 use App\Http\Controllers\Api\CardPreviewController;
 use App\Http\Controllers\Api\CardRenderingController;
-use App\Http\Controllers\Api\A4PrintSheetController;
+use App\Http\Controllers\Api\DataMappingController;
+use App\Http\Controllers\Api\ProjectController;
+use App\Http\Controllers\Api\StudentImportController;
+use App\Http\Controllers\Api\StudentPhotoController;
+use App\Http\Controllers\Api\StudentRecordController;
+use App\Http\Controllers\Api\TemplateConfigurationController;
+use App\Http\Controllers\Api\TemplateController;
+use App\Http\Controllers\Api\TemplateDesignController;
+use App\Http\Controllers\Api\TemplateDesignPreviewController;
+use App\Http\Controllers\Api\TemplateDimensionController;
+use App\Http\Controllers\Api\TemplateElementController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
+/*
+|--------------------------------------------------------------------------
+| Public Routes
+|--------------------------------------------------------------------------
+*/
+
 // Public login endpoint.
-// No authentication is required to access this route.
 Route::post('/login', [AuthController::class, 'login']);
 
-// Protected API routes.
-// A valid Sanctum token is required.
+
+/*
+|--------------------------------------------------------------------------
+| Protected Routes
+|--------------------------------------------------------------------------
+*/
+
 Route::middleware('auth:sanctum')->group(function () {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Authentication
+    |--------------------------------------------------------------------------
+    */
 
     // Return the currently authenticated user.
     Route::get('/user', function (Request $request) {
@@ -36,21 +52,55 @@ Route::middleware('auth:sanctum')->group(function () {
     // Destroy the current authentication token.
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    // Project management APIs.
-    Route::apiResource('projects', ProjectController::class);
 
-    // Template APIs belonging to a specific project.
+    /*
+    |--------------------------------------------------------------------------
+    | Project Management
+    |--------------------------------------------------------------------------
+    */
+
+    Route::apiResource(
+        'projects',
+        ProjectController::class
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Template Management
+    |--------------------------------------------------------------------------
+    */
+
     Route::apiResource(
         'projects.templates',
         TemplateController::class
-    )->except(['create', 'edit']);
+    )->except([
+        'create',
+        'edit',
+    ]);
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Template Elements
+    |--------------------------------------------------------------------------
+    */
 
     Route::apiResource(
-    'templates.elements',
-    TemplateElementController::class
-    )->except(['create', 'edit']);
+        'templates.elements',
+        TemplateElementController::class
+    )->except([
+        'create',
+        'edit',
+    ]);
 
-    // Data mapping APIs for a specific template element.
+
+    /*
+    |--------------------------------------------------------------------------
+    | Data Mapping
+    |--------------------------------------------------------------------------
+    */
+
     Route::get(
         'elements/{element}/mapping',
         [DataMappingController::class, 'show']
@@ -71,17 +121,33 @@ Route::middleware('auth:sanctum')->group(function () {
         [DataMappingController::class, 'destroy']
     );
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Student Import
+    |--------------------------------------------------------------------------
+    */
+
+    // Preview the uploaded student file.
     Route::post(
-    'projects/{project}/students/preview',
-    [StudentImportController::class, 'preview']
+        'projects/{project}/students/preview',
+        [StudentImportController::class, 'preview']
     );
 
+    // Import student records into the project.
     Route::post(
-    'projects/{project}/students/import',
-    [StudentImportController::class, 'import']
+        'projects/{project}/students/import',
+        [StudentImportController::class, 'import']
     );
 
-    // Student photo upload and barcode matching.
+
+    /*
+    |--------------------------------------------------------------------------
+    | Student Photos
+    |--------------------------------------------------------------------------
+    */
+
+    // Upload student photos and match them with student records.
     Route::post(
         'projects/{project}/students/photos',
         [StudentPhotoController::class, 'upload']
@@ -93,34 +159,83 @@ Route::middleware('auth:sanctum')->group(function () {
         [StudentPhotoController::class, 'summary']
     );
 
-    // Upload the locked front/back base designs for a template.
+
+    /*
+    |--------------------------------------------------------------------------
+    | Template Design Upload
+    |--------------------------------------------------------------------------
+    */
+
+    // Upload the locked front/back template designs.
+    //
+    // Supported request fields:
+    // - design_pdf
+    // - front_design
+    // - back_design
+    //
+    // A two-page PDF uses:
+    // Page 1 = Front
+    // Page 2 = Back
     Route::post(
         'projects/{project}/templates/{template}/design',
         [TemplateDesignController::class, 'upload']
     );
 
-    // Return the complete configuration required by the visual editor.
+
+    /*
+    |--------------------------------------------------------------------------
+    | Template Configuration
+    |--------------------------------------------------------------------------
+    */
+
+    // Get the complete configuration for the visual editor.
     Route::get(
         'projects/{project}/templates/{template}/configuration',
         [TemplateConfigurationController::class, 'show']
     );
 
+    // Save the template dimensions and visual elements configuration.
     Route::put(
-    '/projects/{project}/templates/{template}/configuration',
-    [TemplateConfigurationController::class, 'update']
+        'projects/{project}/templates/{template}/configuration',
+        [TemplateConfigurationController::class, 'update']
     );
 
-    // Securely retrieve a template's front/back design.
+
+    /*
+    |--------------------------------------------------------------------------
+    | Template Design Preview
+    |--------------------------------------------------------------------------
+    */
+
+    // Securely retrieve the front or back design.
+    //
+    // Example:
+    // /projects/1/templates/2/design/front
+    // /projects/1/templates/2/design/back
     Route::get(
         'projects/{project}/templates/{template}/design/{side}',
         [TemplateDesignPreviewController::class, 'show']
     );
 
-    // Update the physical dimensions of a card template.
+
+    /*
+    |--------------------------------------------------------------------------
+    | Template Dimensions
+    |--------------------------------------------------------------------------
+    */
+
+    // Update the physical card dimensions in millimetres.
     Route::put(
         'projects/{project}/templates/{template}/dimensions',
         [TemplateDimensionController::class, 'update']
     );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Student Records
+    |--------------------------------------------------------------------------
+    */
 
     // Retrieve paginated student records for a project.
     Route::get(
@@ -128,34 +243,53 @@ Route::middleware('auth:sanctum')->group(function () {
         [StudentRecordController::class, 'index']
     );
 
-    // Retrieve one student record for a project.
+    // Retrieve one student record.
     Route::get(
         'projects/{project}/students/{student}',
         [StudentRecordController::class, 'show']
     );
 
+    // Retrieve the photo belonging to one student.
     Route::get(
-    '/projects/{project}/students/{student}/photo',
-    [StudentRecordController::class, 'photo']
+        'projects/{project}/students/{student}/photo',
+        [StudentRecordController::class, 'photo']
     );
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Card Preview and Rendering
+    |--------------------------------------------------------------------------
+    */
+
+    // Preview a generated card for one student.
     Route::get(
-    '/projects/{project}/templates/{template}/students/{student}/preview',
-    [CardPreviewController::class, 'preview']
+        'projects/{project}/templates/{template}/students/{student}/preview',
+        [CardPreviewController::class, 'preview']
     );
 
+    // Render a generated card for one student.
     Route::get(
-    '/projects/{project}/templates/{template}/students/{student}/render',
-    [CardRenderingController::class, 'render']
+        'projects/{project}/templates/{template}/students/{student}/render',
+        [CardRenderingController::class, 'render']
     );
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | A4 Print Sheet
+    |--------------------------------------------------------------------------
+    */
+
+    // Generate an A4 print sheet.
     Route::post(
-    '/projects/{project}/templates/{template}/print-sheet',
-    [A4PrintSheetController::class, 'render']
+        'projects/{project}/templates/{template}/print-sheet',
+        [A4PrintSheetController::class, 'render']
     );
 
+    // Generate an A4 print sheet using a selected layout.
     Route::post(
-        '/projects/{project}/templates/{template}/print-sheet/layout',
+        'projects/{project}/templates/{template}/print-sheet/layout',
         [A4PrintSheetController::class, 'layout']
     );
 });
