@@ -29,13 +29,11 @@ class DataMappingController extends Controller
      */
     public function store(Request $request, TemplateElement $element): JsonResponse
     {
-        // Validate the Excel/data field that should supply this element's value.
         $validated = $request->validate([
             'source_field' => ['required', 'string', 'max:255'],
-            'is_required' => ['nullable', 'boolean'],
+            'is_required' => ['sometimes', 'boolean'],
         ]);
 
-        // updateOrCreate prevents duplicate mappings for the same element.
         $mapping = $element->dataMapping()->updateOrCreate(
             [
                 'template_element_id' => $element->id,
@@ -49,7 +47,7 @@ class DataMappingController extends Controller
         return response()->json([
             'message' => 'Data mapping saved successfully.',
             'mapping' => $mapping,
-        ], 201);
+        ]);
     }
 
     /**

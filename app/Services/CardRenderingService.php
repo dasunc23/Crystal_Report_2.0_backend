@@ -783,8 +783,8 @@ class CardRenderingService
         |
         */
 
-        $barcodeValue =
-            (string) $student->barcode;
+        $barcodeValue = $this->resolveElementValue($student, $element)
+            ?: $student->barcode;
 
 
         /*
@@ -946,8 +946,7 @@ class CardRenderingService
         if ($showValue) {
 
             $fontSize =
-                $properties['text_size']
-                    ?? 6;
+                (float) ($properties['text_size'] ?? 4);
 
 
             $pdf->SetFont(
@@ -1230,8 +1229,12 @@ class CardRenderingService
 
         $characterCount = (int) (
             $properties['character_count']
-            ?? strlen($studentId)
+            ?? mb_strlen((string) $studentId)
         );
+
+        if ($characterCount <= 0) {
+            $characterCount = mb_strlen((string) $studentId);
+        }
 
 
         /*
@@ -1617,13 +1620,7 @@ class CardRenderingService
         |--------------------------------------------------------------------------
         */
 
-        if (
-            empty($field)
-            &&
-            $element->relationLoaded('dataMapping')
-            &&
-            $element->dataMapping
-        ) {
+        if (empty($field) && $element->dataMapping) {
 
             $field =
                 $element
@@ -1656,8 +1653,24 @@ class CardRenderingService
 
 
         if ($field === 'student_id') {
+            $studentId = $student->student_id;
 
-            return (string) $student->student_id;
+            if ($studentId === null || $studentId === '') {
+                $data = is_array($student->data)
+                    ? $student->data
+                    : [];
+
+                $studentId = $data['student_id']
+                    ?? $data['Student ID']
+                    ?? $data['studentId']
+                    ?? null;
+            }
+
+            if ($studentId === null || $studentId === '') {
+                return null;
+            }
+
+            return (string) $studentId;
         }
 
 

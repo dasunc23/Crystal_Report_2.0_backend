@@ -49,12 +49,13 @@ class TemplateElement extends Model
 
     /**
      * Each visual element can have one data mapping.
-     *
-     * Example:
-     * Student Name element → student_name Excel column.
      */
     public function dataMapping(): HasOne
     {
-        return $this->hasOne(DataMapping::class);
+        return $this->hasOne(
+            DataMapping::class,
+            'template_element_id',
+            'id'
+        );
     }
 }
