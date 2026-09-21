@@ -28,27 +28,57 @@ class A4PrintSheetRenderingService
             );
         }
 
-        $pageWidth = (float) ($options['page_width_mm'] ?? self::DEFAULT_PAGE_WIDTH);
-        $pageHeight = (float) ($options['page_height_mm'] ?? self::DEFAULT_PAGE_HEIGHT);
+        $pageWidth = (float) (
+            $options['page_width_mm'] ?? self::DEFAULT_PAGE_WIDTH
+        );
+
+        $pageHeight = (float) (
+            $options['page_height_mm'] ?? self::DEFAULT_PAGE_HEIGHT
+        );
+
         $orientation = $options['orientation'] ?? 'portrait';
 
         if ($orientation === 'landscape') {
             [$pageWidth, $pageHeight] = [$pageHeight, $pageWidth];
         }
 
-        $marginTop = (float) ($options['margin_top_mm'] ?? 5);
-        $marginRight = (float) ($options['margin_right_mm'] ?? 5);
-        $marginBottom = (float) ($options['margin_bottom_mm'] ?? 5);
-        $marginLeft = (float) ($options['margin_left_mm'] ?? 5);
+        $marginTop = (float) (
+            $options['margin_top_mm'] ?? 5
+        );
+
+        $marginRight = (float) (
+            $options['margin_right_mm'] ?? 5
+        );
+
+        $marginBottom = (float) (
+            $options['margin_bottom_mm'] ?? 5
+        );
+
+        $marginLeft = (float) (
+            $options['margin_left_mm'] ?? 5
+        );
+
         // Keep a physical 1 cm gutter between parallel front/back cards.
-        $pairGap = (float) ($options['pair_gap_mm'] ?? 10);
-        $rowGap = (float) ($options['row_gap_mm'] ?? 0);
+        $pairGap = (float) (
+            $options['pair_gap_mm'] ?? 10
+        );
+
+        $rowGap = (float) (
+            $options['row_gap_mm'] ?? 0
+        );
 
         $cardWidth = (float) $template->width_mm;
         $cardHeight = (float) $template->height_mm;
+
         $horizontalCardCount = ($hasFront && $hasBack) ? 2 : 1;
+
         $requiredWidth = ($cardWidth * $horizontalCardCount)
-            + (($horizontalCardCount === 2) ? $pairGap : 0);
+            + (
+                ($horizontalCardCount === 2)
+                    ? $pairGap
+                    : 0
+            );
+
         $usableWidth = $pageWidth - $marginLeft - $marginRight;
         $usableHeight = $pageHeight - $marginTop - $marginBottom;
 
@@ -60,6 +90,7 @@ class A4PrintSheetRenderingService
         }
 
         $rowHeight = $cardHeight + $rowGap;
+
         $studentsPerPage = (int) floor(
             ($usableHeight + $rowGap) / $rowHeight
         );
@@ -76,10 +107,12 @@ class A4PrintSheetRenderingService
             'mm',
             [$pageWidth, $pageHeight]
         );
+
         $pdf->SetAutoPageBreak(false);
         $pdf->SetMargins(0, 0, 0);
 
         $cardRenderer = app(CardRenderingService::class);
+
         $temporaryFiles = [];
 
         try {
@@ -95,12 +128,16 @@ class A4PrintSheetRenderingService
 
                 $y = $marginTop + ($positionOnPage * $rowHeight);
 
-                // Enabled sides are placed independently; disabled sides do not
-                // create blank cards or reserve horizontal space.
+                // Enabled sides are placed independently.
+                // Disabled sides do not create blank cards or reserve space.
                 if ($hasFront) {
                     $this->placeRenderedCard(
                         $pdf,
-                        $cardRenderer->render($template, $student, 'front'),
+                        $cardRenderer->render(
+                            $template,
+                            $student,
+                            'front'
+                        ),
                         $marginLeft,
                         $y,
                         $cardWidth,
@@ -117,7 +154,11 @@ class A4PrintSheetRenderingService
 
                     $this->placeRenderedCard(
                         $pdf,
-                        $cardRenderer->render($template, $student, 'back'),
+                        $cardRenderer->render(
+                            $template,
+                            $student,
+                            'back'
+                        ),
                         $backX,
                         $y,
                         $cardWidth,
@@ -140,6 +181,13 @@ class A4PrintSheetRenderingService
 
     /**
      * Import one rendered card PDF into the current A4 page.
+     *
+     * The CardRenderingService generates:
+     * - Page 1 for the front side
+     * - Page 2 for the back side
+     *
+     * Therefore, the correct source page must be selected based
+     * on the side being placed onto the A4 sheet.
      */
     private function placeRenderedCard(
         Fpdi $pdf,
@@ -151,19 +199,37 @@ class A4PrintSheetRenderingService
         string $side,
         array &$temporaryFiles
     ): void {
-        $temporaryFile = $this->createTemporaryPdf($cardPdf, $side);
+        $temporaryFile = $this->createTemporaryPdf(
+            $cardPdf,
+            $side
+        );
+
         $temporaryFiles[] = $temporaryFile;
 
-        if ($pdf->setSourceFile($temporaryFile) < 1) {
+        $pageCount = $pdf->setSourceFile($temporaryFile);
+
+        // Each rendered card side should be a single-page PDF.
+        if ($pageCount < 1) {
             throw new \RuntimeException(
                 "Unable to read rendered {$side} card PDF."
             );
         }
 
-        $cardTemplate = $pdf->importPage(1);
-        $pdf->useTemplate($cardTemplate, $x, $y, $width, $height);
-    }
+        // Front and back are each rendered as one complete card page.
+        $cardTemplate = $pdf->importPage(
+            1,
+            \setasign\Fpdi\PdfReader\PageBoundaries::CROP_BOX,
+            false
+        );
 
+        $pdf->useTemplate(
+            $cardTemplate,
+            $x,
+            $y,
+            $width,
+            $height
+        );
+    }
     /**
      * Store a temporary rendered card for FPDI import.
      */
@@ -174,13 +240,24 @@ class A4PrintSheetRenderingService
         $directory = storage_path('app/temp');
 
         if (!File::exists($directory)) {
-            File::makeDirectory($directory, 0755, true);
+            File::makeDirectory(
+                $directory,
+                0755,
+                true
+            );
         }
 
-        $path = $directory . DIRECTORY_SEPARATOR
-            . $prefix . '_' . uniqid('', true) . '.pdf';
+        $path = $directory
+            . DIRECTORY_SEPARATOR
+            . $prefix
+            . '_'
+            . uniqid('', true)
+            . '.pdf';
 
-        File::put($path, $pdfContent);
+        File::put(
+            $path,
+            $pdfContent
+        );
 
         return $path;
     }
@@ -193,22 +270,47 @@ class A4PrintSheetRenderingService
         int $studentCount,
         array $options = []
     ): array {
-        $pageWidth = (float) ($options['page_width_mm'] ?? self::DEFAULT_PAGE_WIDTH);
-        $pageHeight = (float) ($options['page_height_mm'] ?? self::DEFAULT_PAGE_HEIGHT);
+        $pageWidth = (float) (
+            $options['page_width_mm'] ?? self::DEFAULT_PAGE_WIDTH
+        );
+
+        $pageHeight = (float) (
+            $options['page_height_mm'] ?? self::DEFAULT_PAGE_HEIGHT
+        );
+
         $orientation = $options['orientation'] ?? 'portrait';
 
         if ($orientation === 'landscape') {
             [$pageWidth, $pageHeight] = [$pageHeight, $pageWidth];
         }
 
-        $marginTop = (float) ($options['margin_top_mm'] ?? 5);
-        $marginRight = (float) ($options['margin_right_mm'] ?? 5);
-        $marginBottom = (float) ($options['margin_bottom_mm'] ?? 5);
-        $marginLeft = (float) ($options['margin_left_mm'] ?? 5);
-        $pairGap = (float) ($options['pair_gap_mm'] ?? 10);
-        $rowGap = (float) ($options['row_gap_mm'] ?? 0);
+        $marginTop = (float) (
+            $options['margin_top_mm'] ?? 5
+        );
+
+        $marginRight = (float) (
+            $options['margin_right_mm'] ?? 5
+        );
+
+        $marginBottom = (float) (
+            $options['margin_bottom_mm'] ?? 5
+        );
+
+        $marginLeft = (float) (
+            $options['margin_left_mm'] ?? 5
+        );
+
+        $pairGap = (float) (
+            $options['pair_gap_mm'] ?? 10
+        );
+
+        $rowGap = (float) (
+            $options['row_gap_mm'] ?? 0
+        );
+
         $cardWidth = (float) $template->width_mm;
         $cardHeight = (float) $template->height_mm;
+
         $hasFront = (bool) $template->has_front;
         $hasBack = (bool) $template->has_back;
 
@@ -219,10 +321,18 @@ class A4PrintSheetRenderingService
         }
 
         $bothSides = $hasFront && $hasBack;
-        $pairWidth = $bothSides ? ($cardWidth * 2) + $pairGap : $cardWidth;
-        $usableHeight = $pageHeight - $marginTop - $marginBottom;
+
+        $pairWidth = $bothSides
+            ? ($cardWidth * 2) + $pairGap
+            : $cardWidth;
+
+        $usableHeight = $pageHeight
+            - $marginTop
+            - $marginBottom;
+
         $studentsPerPage = (int) floor(
-            ($usableHeight + $rowGap) / ($cardHeight + $rowGap)
+            ($usableHeight + $rowGap)
+            / ($cardHeight + $rowGap)
         );
 
         return [
@@ -231,25 +341,34 @@ class A4PrintSheetRenderingService
                 'height_mm' => $pageHeight,
                 'orientation' => $orientation,
             ],
+
             'card' => [
                 'width_mm' => $cardWidth,
                 'height_mm' => $cardHeight,
             ],
+
             'pair' => [
                 'width_mm' => $pairWidth,
                 'gap_mm' => $bothSides ? $pairGap : 0,
             ],
+
             'margins' => [
                 'top_mm' => $marginTop,
                 'right_mm' => $marginRight,
                 'bottom_mm' => $marginBottom,
                 'left_mm' => $marginLeft,
             ],
+
             'row_gap_mm' => $rowGap,
+
             'students_per_page' => $studentsPerPage,
+
             'student_count' => $studentCount,
+
             'page_count' => $studentsPerPage > 0
-                ? (int) ceil($studentCount / $studentsPerPage)
+                ? (int) ceil(
+                    $studentCount / $studentsPerPage
+                )
                 : 0,
         ];
     }

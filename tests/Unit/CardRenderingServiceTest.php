@@ -64,6 +64,18 @@ class CardRenderingServiceTest extends TestCase
         self::assertSame('Issued by ECLS', $this->resolveValue($student, $element));
     }
 
+    public function test_manufacture_date_is_generated_without_student_data(): void
+    {
+        $student = new StudentRecord();
+        $element = new TemplateElement([
+            'type' => 'manufacture_date',
+            'side' => 'back',
+            'field_name' => 'manufacture_date',
+        ]);
+
+        self::assertSame(now()->toDateString(), $this->resolveValue($student, $element));
+    }
+
     private function resolveValue(StudentRecord $student, TemplateElement $element): ?string
     {
         $method = new ReflectionMethod(CardRenderingService::class, 'resolveElementValue');

@@ -151,6 +151,10 @@ class TemplateGenerationValidationService
                 : null;
         }
 
+        if ($field === 'manufacture_date') {
+            return now()->toDateString();
+        }
+
         $data = is_array($student->data) ? $student->data : [];
 
         return array_key_exists($field, $data)

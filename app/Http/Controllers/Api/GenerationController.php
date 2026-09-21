@@ -82,6 +82,7 @@ class GenerationController extends Controller
                     'barcode' => $record->barcode,
                     'student_id' => $record->student_id,
                     'student_name' => $record->student_name,
+                    'manufacture_date' => now()->toDateString(),
                     default => is_array($record->data)
                         ? ($record->data[$field] ?? null)
                         : null,

@@ -96,6 +96,9 @@ class CardRenderingService
             [$width, $height]
         );
 
+        $pdf->SetAutoPageBreak(false);
+        $pdf->SetMargins(0, 0, 0);
+
 
         /*
         |--------------------------------------------------------------------------
@@ -209,6 +212,7 @@ class CardRenderingService
 
                 case 'generic_text':
                 case 'text':
+                case 'manufacture_date':
 
                     $this->drawTextElement(
                         $pdf,
@@ -1055,9 +1059,12 @@ class CardRenderingService
             $properties['font_family']
                 ?? 'Arial';
 
-        $fontSize =
-            $properties['font_size']
-                ?? 10;
+        $fontSize = (
+            (float) (
+                $properties['font_size']
+                    ?? 10
+            )
+        ) * 0.75;
 
         $fontWeight =
             $properties['font_weight']
@@ -1596,13 +1603,38 @@ class CardRenderingService
     }
 
 
-    /**
-     * Resolve a dynamic element value from the student.
-     */
+/**
+ * Resolve a dynamic element value from the student.
+ *
+ * Manufacture date is a template-controlled value.
+ * It does NOT come from Excel. When the template contains
+ * a manufacture_date element, today's date is generated
+ * automatically for every generated card.
+ */
     private function resolveElementValue(
         StudentRecord $student,
         $element
     ): ?string {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Manufacture Date
+        |--------------------------------------------------------------------------
+        |
+        | IMPORTANT:
+        | Manufacture date is NOT an Excel field.
+        |
+        | It is added to the template editor and saved as an element
+        | with type "manufacture_date".
+        |
+        | Therefore, always resolve it directly from the current date.
+        |
+        */
+
+        if ($element->type === 'manufacture_date') {
+            return now()->toDateString();
+        }
+
 
         /*
         |--------------------------------------------------------------------------
@@ -1617,7 +1649,6 @@ class CardRenderingService
                     ? $element->properties
                     : [];
 
-
             return isset($properties['text'])
                 ? (string) $properties['text']
                 : null;
@@ -1630,8 +1661,7 @@ class CardRenderingService
         |--------------------------------------------------------------------------
         */
 
-        $field =
-            $element->field_name;
+        $field = $element->field_name;
 
 
         /*
@@ -1642,7 +1672,6 @@ class CardRenderingService
         */
 
         if (empty($field) && $element->dataMapping) {
-
             $field =
                 $element
                     ->dataMapping
@@ -1652,22 +1681,33 @@ class CardRenderingService
 
         /*
         |--------------------------------------------------------------------------
-        | No field means no value.
+        | Older saved editor elements
         |--------------------------------------------------------------------------
         */
 
         if (empty($field)) {
-            // Older saved editor elements used their built-in type as the
-            // explicit data source; do not add fields without such an element.
+
             $field = $element->exists && $element->side
                 ? match ($element->type) {
-                'barcode' => 'barcode',
-                'student_id', 'student_id_grid' => 'student_id',
-                'student_name' => 'student_name',
-                default => null,
+
+                    'barcode' => 'barcode',
+
+                    'student_id',
+                    'student_id_grid' => 'student_id',
+
+                    'student_name' => 'student_name',
+
+                    default => null,
                 }
                 : null;
         }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | No field means no value
+        |--------------------------------------------------------------------------
+        */
 
         if (empty($field)) {
             return null;
@@ -1676,25 +1716,33 @@ class CardRenderingService
 
         /*
         |--------------------------------------------------------------------------
-        | Core student fields.
+        | Barcode
         |--------------------------------------------------------------------------
         */
 
         if ($field === 'barcode') {
-
             return (string) $student->barcode;
         }
 
 
+        /*
+        |--------------------------------------------------------------------------
+        | Student ID
+        |--------------------------------------------------------------------------
+        */
+
         if ($field === 'student_id') {
+
             $studentId = $student->student_id;
 
             if ($studentId === null || $studentId === '') {
+
                 $data = is_array($student->data)
                     ? $student->data
                     : [];
 
-                $studentId = $data['student_id']
+                $studentId =
+                    $data['student_id']
                     ?? $data['Student ID']
                     ?? $data['studentId']
                     ?? null;
@@ -1708,15 +1756,35 @@ class CardRenderingService
         }
 
 
-        if ($field === 'student_name') {
+        /*
+        |--------------------------------------------------------------------------
+        | Student Name
+        |--------------------------------------------------------------------------
+        */
 
+        if ($field === 'student_name') {
             return (string) $student->student_name;
         }
 
 
         /*
         |--------------------------------------------------------------------------
-        | Extra Excel fields.
+        | Manufacture Date
+        |--------------------------------------------------------------------------
+        |
+        | This is kept as a second safety check in case an older template
+        | has field_name = manufacture_date but its element type is different.
+        |
+        */
+
+        if ($field === 'manufacture_date') {
+            return now()->toDateString();
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Extra Excel fields
         |--------------------------------------------------------------------------
         */
 
@@ -1725,16 +1793,14 @@ class CardRenderingService
                 ? $student->data
                 : [];
 
-
         if (array_key_exists($field, $data)) {
-
             return (string) $data[$field];
         }
 
 
         /*
         |--------------------------------------------------------------------------
-        | Unknown field.
+        | Unknown field
         |--------------------------------------------------------------------------
         */
 

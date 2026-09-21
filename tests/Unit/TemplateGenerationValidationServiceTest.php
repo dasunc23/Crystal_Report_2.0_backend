@@ -63,4 +63,30 @@ class TemplateGenerationValidationServiceTest extends TestCase
         self::assertCount(1, $errors);
         self::assertSame('A matched profile photo is required by the template.', $errors[0]['reason']);
     }
+
+    public function test_manufacture_date_is_available_without_student_data(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('designs/back.pdf', 'pdf');
+
+        $template = new Template([
+            'has_front' => false,
+            'has_back' => true,
+            'back_design_path' => 'designs/back.pdf',
+        ]);
+        $element = new TemplateElement([
+            'id' => 11,
+            'type' => 'text',
+            'side' => 'back',
+            'field_name' => 'manufacture_date',
+            'visible' => true,
+        ]);
+        $element->setRelation('dataMapping', null);
+        $template->setRelation('elements', collect([$element]));
+
+        $errors = app(TemplateGenerationValidationService::class)
+            ->validate($template, [new StudentRecord()]);
+
+        self::assertSame([], $errors);
+    }
 }
