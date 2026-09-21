@@ -7,6 +7,7 @@ use App\Models\Project;
 use App\Models\StudentRecord;
 use App\Models\Template;
 use App\Services\A4PrintSheetRenderingService;
+use App\Services\TemplateGenerationValidationService;
 use Illuminate\Http\Request;
 
 class A4PrintSheetController extends Controller
@@ -18,7 +19,8 @@ class A4PrintSheetController extends Controller
     public function render(
         Request $request,
         Project $project,
-        Template $template
+        Template $template,
+        TemplateGenerationValidationService $validator
     ) {
 
         /*
@@ -38,6 +40,13 @@ class A4PrintSheetController extends Controller
 
             'student_ids.*' => [
                 'integer',
+            ],
+
+            // Preview is intentionally still rendered in memory through the
+            // existing endpoint and never creates a generation job.
+            'preview' => [
+                'sometimes',
+                'boolean',
             ],
 
             'orientation' => [
@@ -129,6 +138,18 @@ class A4PrintSheetController extends Controller
                 422,
                 'One or more student IDs do not belong to this project.'
             );
+        }
+
+        $validationErrors = $validator->validate($template, $students);
+
+        if ($validationErrors !== []) {
+            $firstError = $validationErrors[0]['reason'] ?? 'Template validation failed.';
+
+            return response()->json([
+                'message' => $firstError,
+                'error_summary' => 'The selected template or students are not ready for PDF generation.',
+                'errors' => $validationErrors,
+            ], 422);
         }
 
         /*

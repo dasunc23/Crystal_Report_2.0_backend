@@ -40,9 +40,12 @@ class StudentPhotoController extends Controller
 
         $matchedCount = 0;
         $invalidCount = 0;
+        $duplicateCount = 0;
 
         $matchedPhotos = [];
         $invalidPhotos = [];
+        $duplicatePhotos = [];
+        $seenBarcodes = [];
 
         foreach ($request->file('photos') as $photo) {
 
@@ -64,6 +67,20 @@ class StudentPhotoController extends Controller
                 $originalFilename,
                 PATHINFO_FILENAME
             );
+
+            // Do not let two files in one upload silently replace each other.
+            if (isset($seenBarcodes[$barcode])) {
+                $duplicateCount++;
+                $duplicatePhotos[] = [
+                    'filename' => $originalFilename,
+                    'barcode' => $barcode,
+                    'reason' => 'Another uploaded file uses the same barcode filename.',
+                ];
+
+                continue;
+            }
+
+            $seenBarcodes[$barcode] = true;
 
             /*
              * Find the student ONLY inside this project.
@@ -177,6 +194,19 @@ class StudentPhotoController extends Controller
             $totalStudents - $studentsWithPhotos
         );
 
+        $missingStudents = $project->studentRecords()
+            ->whereDoesntHave('photo', function ($query) {
+                $query->where('match_status', 'matched');
+            })
+            ->get(['id', 'barcode', 'student_id', 'student_name'])
+            ->map(fn ($student) => [
+                'student_record_id' => $student->id,
+                'barcode' => $student->barcode,
+                'student_id' => $student->student_id,
+                'student_name' => $student->student_name,
+            ])
+            ->values();
+
         return response()->json([
             'message' => 'Student photos processed successfully.',
 
@@ -187,11 +217,16 @@ class StudentPhotoController extends Controller
                 'matched' => $matchedCount,
                 'missing' => $missingCount,
                 'invalid' => $invalidCount,
+                'duplicates' => $duplicateCount,
             ],
 
             'matched_photos' => $matchedPhotos,
 
             'invalid_photos' => $invalidPhotos,
+
+            'duplicate_photos' => $duplicatePhotos,
+
+            'missing_students' => $missingStudents,
         ]);
     }
 

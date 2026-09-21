@@ -22,6 +22,17 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
 
     public int $updatedCount = 0;
 
+    public int $skippedCount = 0;
+
+    public int $failedCount = 0;
+
+    /**
+     * Row-level reasons returned to the import API.
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    public array $rowErrors = [];
+
     /**
      * Receive the project when creating the importer.
      */
@@ -35,28 +46,55 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
      */
     public function collection(Collection $rows): void
     {
-        foreach ($rows as $row) {
+        $seenBarcodes = [];
+
+        foreach ($rows as $index => $row) {
             // Convert the Excel row into a normal PHP array.
             $data = $row->toArray();
 
-            // Get the barcode and always treat it as text.
-            $barcode = isset($data['barcode'])
-                ? trim((string) $data['barcode'])
-                : '';
-
-            // Skip rows without a barcode.
-            if ($barcode === '') {
-                continue;
-            }
-
-            // Get the standard student fields.
             $studentId = isset($data['student_id'])
                 ? trim((string) $data['student_id'])
-                : null;
+                : '';
 
             $studentName = isset($data['student_name'])
                 ? trim((string) $data['student_name'])
+                : '';
+
+            // Rows without identifying student data cannot be imported.
+            if ($studentId === '' && $studentName === '') {
+                $this->skippedCount++;
+                $this->rowErrors[] = [
+                    'row' => $index + 2,
+                    'reason' => 'Student name or student ID is required.',
+                ];
+
+                continue;
+            }
+
+            // Keep supplied barcode text exactly, including leading zeroes.
+            $barcode = isset($data['barcode'])
+                ? trim((string) $data['barcode'])
                 : null;
+
+            if ($barcode === '') {
+                $barcode = null;
+            }
+
+            // Do not process the same non-empty barcode twice in one upload.
+            if ($barcode !== null && isset($seenBarcodes[$barcode])) {
+                $this->skippedCount++;
+                $this->rowErrors[] = [
+                    'row' => $index + 2,
+                    'barcode' => $barcode,
+                    'reason' => 'Duplicate barcode in the uploaded file.',
+                ];
+
+                continue;
+            }
+
+            if ($barcode !== null) {
+                $seenBarcodes[$barcode] = true;
+            }
 
             // Store all Excel data.
             //
@@ -72,35 +110,44 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
                 $extraData['student_name']
             );
 
-            // Check whether this barcode already exists
-            // inside the current project.
-            $student = StudentRecord::where('project_id', $this->project->id)
-                ->where('barcode', $barcode)
-                ->first();
+            try {
+                // Supplied barcodes identify updates; null barcodes create a
+                // record for the later explicit generation step.
+                $student = $barcode === null
+                    ? null
+                    : StudentRecord::where('project_id', $this->project->id)
+                        ->where('barcode', $barcode)
+                        ->first();
 
-            if ($student) {
-                // Update the existing student record.
-                $student->update([
-                    'student_id' => $studentId,
-                    'student_name' => $studentName,
+                if ($student) {
+                    $student->update([
+                        'student_id' => $studentId !== '' ? $studentId : null,
+                        'student_name' => $studentName !== '' ? $studentName : null,
+                        'data' => $extraData,
+                    ]);
+
+                    $this->updatedCount++;
+
+                    continue;
+                }
+
+                StudentRecord::create([
+                    'project_id' => $this->project->id,
+                    'barcode' => $barcode,
+                    'student_id' => $studentId !== '' ? $studentId : null,
+                    'student_name' => $studentName !== '' ? $studentName : null,
                     'data' => $extraData,
                 ]);
 
-                $this->updatedCount++;
-
-                continue;
+                $this->importedCount++;
+            } catch (\Throwable $exception) {
+                $this->failedCount++;
+                $this->rowErrors[] = [
+                    'row' => $index + 2,
+                    'barcode' => $barcode,
+                    'reason' => $exception->getMessage(),
+                ];
             }
-
-            // Create a new student record.
-            StudentRecord::create([
-                'project_id' => $this->project->id,
-                'barcode' => $barcode,
-                'student_id' => $studentId,
-                'student_name' => $studentName,
-                'data' => $extraData,
-            ]);
-
-            $this->importedCount++;
         }
     }
 }

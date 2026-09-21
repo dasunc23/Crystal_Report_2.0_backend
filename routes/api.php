@@ -2,9 +2,11 @@
 
 use App\Http\Controllers\Api\A4PrintSheetController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BarcodeGenerationController;
 use App\Http\Controllers\Api\CardPreviewController;
 use App\Http\Controllers\Api\CardRenderingController;
 use App\Http\Controllers\Api\DataMappingController;
+use App\Http\Controllers\Api\GenerationController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\StudentImportController;
 use App\Http\Controllers\Api\StudentPhotoController;
@@ -253,6 +255,39 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get(
         'projects/{project}/students/{student}/photo',
         [StudentRecordController::class, 'photo']
+    );
+
+    // Generate only missing project-scoped barcode values.
+    Route::post(
+        'projects/{project}/students/generate-barcodes',
+        [BarcodeGenerationController::class, 'generate']
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Bulk Generation
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get(
+        'projects/{project}/templates/{template}/generation-preview',
+        [GenerationController::class, 'preview']
+    );
+
+    Route::post(
+        'projects/{project}/templates/{template}/generate',
+        [GenerationController::class, 'generate']
+    );
+
+    Route::get(
+        'projects/{project}/generation-jobs/{job}',
+        [GenerationController::class, 'status']
+    );
+
+    Route::get(
+        'projects/{project}/generation-jobs/{job}/download',
+        [GenerationController::class, 'download']
     );
 
 
