@@ -1059,12 +1059,50 @@ class CardRenderingService
             $properties['font_family']
                 ?? 'Arial';
 
-        $fontSize = (
-            (float) (
-                $properties['font_size']
-                    ?? 10
-            )
-        ) * 0.75;
+        /*
+        |--------------------------------------------------------------------------
+        | Font size
+        |--------------------------------------------------------------------------
+        |
+        | Normal text elements keep the existing CSS-pixel -> PDF-point
+        | conversion used by this renderer.
+        |
+        | Manufacture Date is different because the Template Editor displays
+        | its font size in CSS pixels inside the scaled card preview. A direct
+        | 0.75 conversion makes the PDF date visibly larger than the date shown
+        | in the editor.
+        |
+        | For Manufacture Date only, use the calibrated editor-preview scale.
+        | This keeps a saved font size such as 7 visually consistent between
+        | the editor and the generated PDF while leaving every other element
+        | unchanged.
+        |
+        */
+        $editorFontSize = (float) (
+            $properties['font_size']
+                ?? 10
+        );
+
+        if ($element->type === 'manufacture_date') {
+
+            /*
+            | The editor's 92 mm card is displayed at roughly 620 px wide.
+            | Therefore one editor CSS pixel is approximately:
+            |
+            |     92 / 620 = 0.1484 mm
+            |
+            | Convert that physical height to PDF points:
+            |
+            |     0.1484 * 72 / 25.4 ≈ 0.42 pt
+            |
+            | This is intentionally applied only to Manufacture Date.
+            */
+            $fontSize = $editorFontSize * 0.42;
+
+        } else {
+
+            $fontSize = $editorFontSize * 0.75;
+        }
 
         $fontWeight =
             $properties['font_weight']
@@ -1122,6 +1160,143 @@ class CardRenderingService
         |--------------------------------------------------------------------------
         | Draw text.
         |--------------------------------------------------------------------------
+        |
+        | Manufacture date is handled separately so it is always rendered as
+        | one line using the exact X, Y, width and height saved by the editor.
+        | It must never wrap, and the date itself is resolved dynamically by
+        | resolveElementValue().
+        |
+        */
+
+        if ($element->type === 'manufacture_date') {
+
+            /*
+            |--------------------------------------------------------------------------
+            | Manufacture date - exact template box
+            |--------------------------------------------------------------------------
+            |
+            | The editor stores dimensions in millimetres. Do not calculate a
+            | new position or size for the date. Use the saved values directly.
+            |
+            | Manufacture Date uses the calibrated font conversion above so
+            | the saved editor font size has the same visual scale in the PDF.
+            |
+            */
+
+            $textValue = (string) $value;
+
+            /*
+            |--------------------------------------------------------------------------
+            | Calculate the text width.
+            |--------------------------------------------------------------------------
+            |
+            | Text() does not wrap, which prevents values such as 2026-09-23
+            | from being split into multiple lines.
+            |
+            */
+
+            $textWidth = $pdf->GetStringWidth(
+                $textValue
+            );
+
+            /*
+            |--------------------------------------------------------------------------
+            | Horizontal alignment inside the saved element box.
+            |--------------------------------------------------------------------------
+            */
+
+            if ($alignment === 'C') {
+
+                $textX =
+                    $x +
+                    (($width - $textWidth) / 2);
+
+            } elseif ($alignment === 'R') {
+
+                $textX =
+                    $x +
+                    $width -
+                    $textWidth;
+
+            } else {
+
+                $textX = $x;
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Keep the date inside the saved X/width boundaries.
+            |--------------------------------------------------------------------------
+            */
+
+            $textX = max(
+                $x,
+                min(
+                    $x + max(0, $width - $textWidth),
+                    $textX
+                )
+            );
+
+            /*
+            |--------------------------------------------------------------------------
+            | Vertically centre the date inside the saved Y/height box.
+            |--------------------------------------------------------------------------
+            |
+            | FPDF Text() uses a baseline rather than the top-left corner.
+            | Convert the effective font size from points to millimetres and
+            | calculate the baseline so the date sits inside the same box that
+            | the user positioned in the editor.
+            |
+            */
+
+            $fontHeightMm =
+                $fontSize * (25.4 / 72);
+
+            $textY =
+                $y +
+                (($height - $fontHeightMm) / 2) +
+                ($fontHeightMm * 0.80);
+
+            /*
+            |--------------------------------------------------------------------------
+            | Protect very small boxes.
+            |--------------------------------------------------------------------------
+            */
+
+            $minimumBaseline =
+                $y + ($fontHeightMm * 0.80);
+
+            $maximumBaseline =
+                $y + $height;
+
+            $textY = max(
+                $minimumBaseline,
+                min($maximumBaseline, $textY)
+            );
+
+            /*
+            |--------------------------------------------------------------------------
+            | Render current manufacture date as a single line.
+            |--------------------------------------------------------------------------
+            */
+
+            $pdf->Text(
+                $textX,
+                $textY,
+                $textValue
+            );
+
+            return;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Existing rendering for all other text elements
+        |--------------------------------------------------------------------------
+        |
+        | Keep the existing behaviour unchanged for student names, generic
+        | text and static text.
+        |
         */
 
         $pdf->SetXY(
@@ -1129,8 +1304,7 @@ class CardRenderingService
             $y
         );
 
-
-        $pdf->MultiCell(
+        $pdf->Cell(
             $width,
             $height,
             (string) $value,
@@ -1632,7 +1806,7 @@ class CardRenderingService
         */
 
         if ($element->type === 'manufacture_date') {
-            return now()->toDateString();
+            return now()->format('d/m/Y');
         }
 
 
@@ -1778,7 +1952,7 @@ class CardRenderingService
         */
 
         if ($field === 'manufacture_date') {
-            return now()->toDateString();
+            return now()->format('d/m/Y');
         }
 
 
