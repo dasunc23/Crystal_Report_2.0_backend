@@ -42,25 +42,38 @@ class A4PrintSheetRenderingService
             [$pageWidth, $pageHeight] = [$pageHeight, $pageWidth];
         }
 
-        $marginTop = (float) (
-            $options['margin_top_mm'] ?? 5
-        );
+        /*
+        |--------------------------------------------------------------------------
+        | A4 vertical layout defaults
+        |--------------------------------------------------------------------------
+        |
+        | The card dimensions come directly from the template and MUST NOT be
+        | changed or scaled here.
+        |
+        | For the current 92 mm card width and an 8.1 mm centre gap:
+        |
+        |   210 - 92 - 8.1 - 92 = 17.9 mm
+        |   17.9 / 2 = 8.95 mm on each outer side
+        |
+        | Therefore, when both front and back are enabled, the pair is centred
+        | on A4 automatically. This keeps the left and right spaces identical.
+        |
+        | Note: exactly 10 mm on both sides AND an 8.1 mm centre gap cannot fit
+        | two 92 mm cards on a 210 mm A4 page. Keeping the cards fixed means
+        | 8.95 mm equal outer spaces is the physically correct layout.
+        |
+        */
 
-        $marginRight = (float) (
-            $options['margin_right_mm'] ?? 5
+        $marginTop = (float) (
+            $options['margin_top_mm'] ?? 6
         );
 
         $marginBottom = (float) (
-            $options['margin_bottom_mm'] ?? 5
+            $options['margin_bottom_mm'] ?? 6
         );
 
-        $marginLeft = (float) (
-            $options['margin_left_mm'] ?? 5
-        );
-
-        // Keep a physical 1 cm gutter between parallel front/back cards.
         $pairGap = (float) (
-            $options['pair_gap_mm'] ?? 10
+            $options['pair_gap_mm'] ?? 8.1
         );
 
         $rowGap = (float) (
@@ -79,13 +92,50 @@ class A4PrintSheetRenderingService
                     : 0
             );
 
+        /*
+        |--------------------------------------------------------------------------
+        | Calculate horizontal placement
+        |--------------------------------------------------------------------------
+        |
+        | When front and back are both enabled, calculate the outer margins from
+        | the actual fixed card dimensions. This guarantees equal left/right
+        | whitespace and prevents accidental overflow caused by old 5 mm margins.
+        |
+        | When only one side is enabled, retain the configured/default 10 mm
+        | left/right margins.
+        |
+        */
+
+        if ($horizontalCardCount === 2) {
+            $remainingWidth = $pageWidth - $requiredWidth;
+
+            if ($remainingWidth < 0) {
+                throw new \RuntimeException(
+                    "The enabled front/back card pair ({$requiredWidth} mm) does not fit "
+                    . "inside the page width ({$pageWidth} mm) while keeping the card "
+                    . "dimensions unchanged."
+                );
+            }
+
+            $marginLeft = $remainingWidth / 2;
+            $marginRight = $remainingWidth / 2;
+        } else {
+            $marginLeft = (float) (
+                $options['margin_left_mm'] ?? 10
+            );
+
+            $marginRight = (float) (
+                $options['margin_right_mm'] ?? 10
+            );
+        }
+
         $usableWidth = $pageWidth - $marginLeft - $marginRight;
         $usableHeight = $pageHeight - $marginTop - $marginBottom;
 
-        if ($requiredWidth > $usableWidth) {
+        if ($requiredWidth > $usableWidth + 0.001) {
             throw new \RuntimeException(
                 "The enabled card layout ({$requiredWidth} mm) does not fit "
-                . "inside the available A4 width ({$usableWidth} mm)."
+                . "inside the available page width ({$usableWidth} mm)."
             );
         }
 
@@ -167,6 +217,36 @@ class A4PrintSheetRenderingService
                         $temporaryFiles
                     );
                 }
+
+                /*
+                |--------------------------------------------------------------------------
+                | Centre separator and page number
+                |--------------------------------------------------------------------------
+                |
+                | The separator is drawn only when front and back cards are present.
+                | It sits exactly in the 8.1 mm centre gap and does not overlap either
+                | card because the line is positioned at the centre of that gap.
+                |
+                | The current A4 page number is repeated beside each student pair,
+                | matching the physical manufacturing-sheet style shown in the
+                | reference layout.
+                |
+                */
+
+                if ($hasFront && $hasBack) {
+                    $centerX = $marginLeft
+                        + $cardWidth
+                        + ($pairGap / 2);
+
+                    $this->drawPairSeparator(
+                        $pdf,
+                        $centerX,
+                        $y,
+                        $cardHeight,
+                        $studentIndex,
+                        $studentsPerPage
+                    );
+                }
             }
 
             return $pdf->Output('S');
@@ -177,6 +257,62 @@ class A4PrintSheetRenderingService
                 }
             }
         }
+    }
+
+    /**
+     * Draw the vertical separator and page number in the centre gap.
+     *
+     * The card dimensions are never modified by this method.
+     */
+    private function drawPairSeparator(
+        Fpdi $pdf,
+        float $centerX,
+        float $y,
+        float $cardHeight,
+        int $studentIndex,
+        int $studentsPerPage
+    ): void {
+        $pageNumber = (int) floor(
+            $studentIndex / max(1, $studentsPerPage)
+        ) + 1;
+
+        // Use a thin manufacturing-style separator line.
+        $pdf->SetDrawColor(120, 120, 120);
+        $pdf->SetLineWidth(0.15);
+        $pdf->Line(
+            $centerX,
+            $y,
+            $centerX,
+            $y + $cardHeight
+        );
+
+        // Place the page number near the top of the centre gap.
+        // A small white rectangle keeps the number readable over the line.
+        $labelWidth = 5.5;
+        $labelHeight = 3.5;
+        $labelX = $centerX - ($labelWidth / 2);
+        $labelY = $y + 1.2;
+
+        $pdf->SetFillColor(255, 255, 255);
+        $pdf->Rect(
+            $labelX,
+            $labelY,
+            $labelWidth,
+            $labelHeight,
+            'F'
+        );
+
+        $pdf->SetTextColor(45, 45, 45);
+        $pdf->SetFont('Helvetica', '', 6);
+        $pdf->SetXY($labelX, $labelY + 0.15);
+        $pdf->Cell(
+            $labelWidth,
+            $labelHeight,
+            (string) $pageNumber,
+            0,
+            0,
+            'C'
+        );
     }
 
     /**
@@ -284,24 +420,18 @@ class A4PrintSheetRenderingService
             [$pageWidth, $pageHeight] = [$pageHeight, $pageWidth];
         }
 
+        // Keep five 57 mm rows centred vertically on A4 by default.
         $marginTop = (float) (
-            $options['margin_top_mm'] ?? 5
-        );
-
-        $marginRight = (float) (
-            $options['margin_right_mm'] ?? 5
+            $options['margin_top_mm'] ?? 6
         );
 
         $marginBottom = (float) (
-            $options['margin_bottom_mm'] ?? 5
+            $options['margin_bottom_mm'] ?? 6
         );
 
-        $marginLeft = (float) (
-            $options['margin_left_mm'] ?? 5
-        );
-
+        // The fixed centre gap between the front and back cards.
         $pairGap = (float) (
-            $options['pair_gap_mm'] ?? 10
+            $options['pair_gap_mm'] ?? 8.1
         );
 
         $rowGap = (float) (
@@ -325,6 +455,29 @@ class A4PrintSheetRenderingService
         $pairWidth = $bothSides
             ? ($cardWidth * 2) + $pairGap
             : $cardWidth;
+
+        if ($bothSides) {
+            // Equal outer whitespace when the card dimensions are fixed.
+            $outerMargin = ($pageWidth - $pairWidth) / 2;
+
+            if ($outerMargin < 0) {
+                throw new \RuntimeException(
+                    "The fixed card pair ({$pairWidth} mm) does not fit "
+                    . "inside the page width ({$pageWidth} mm)."
+                );
+            }
+
+            $marginLeft = $outerMargin;
+            $marginRight = $outerMargin;
+        } else {
+            $marginLeft = (float) (
+                $options['margin_left_mm'] ?? 10
+            );
+
+            $marginRight = (float) (
+                $options['margin_right_mm'] ?? 10
+            );
+        }
 
         $usableHeight = $pageHeight
             - $marginTop
@@ -372,4 +525,5 @@ class A4PrintSheetRenderingService
                 : 0,
         ];
     }
+
 }
