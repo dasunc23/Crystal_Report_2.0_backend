@@ -1158,6 +1158,34 @@ class CardRenderingService
 
         /*
         |--------------------------------------------------------------------------
+        | Text color
+        |--------------------------------------------------------------------------
+        |
+        | The Template Editor stores the selected text color inside the element
+        | properties as a HEX value, for example:
+        |
+        | #000000
+        | #ffffff
+        | #1d4ed8
+        |
+        | Apply that saved color to the PDF so the generated card matches the
+        | color selected in the Template Editor.
+        |
+        */
+
+        $textColor = $this->hexToRgb(
+            (string) ($properties['text_color'] ?? '#111827')
+        );
+
+        $pdf->SetTextColor(
+            $textColor[0],
+            $textColor[1],
+            $textColor[2]
+        );
+
+
+        /*
+        |--------------------------------------------------------------------------
         | Draw text.
         |--------------------------------------------------------------------------
         |
@@ -1286,6 +1314,19 @@ class CardRenderingService
                 $textValue
             );
 
+            /*
+            |--------------------------------------------------------------------------
+            | Reset text color
+            |--------------------------------------------------------------------------
+            |
+            | FPDF keeps the current text color as global PDF state. Reset it
+            | after this element so a later element (for example a barcode value)
+            | does not accidentally inherit the manufacture-date color.
+            |
+            */
+
+            $pdf->SetTextColor(0, 0, 0);
+
             return;
         }
 
@@ -1311,6 +1352,18 @@ class CardRenderingService
             0,
             $alignment
         );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Reset text color
+        |--------------------------------------------------------------------------
+        |
+        | Prevent this element's selected color from leaking into subsequent
+        | PDF elements.
+        |
+        */
+
+        $pdf->SetTextColor(0, 0, 0);
     }
 
     private function hexToRgb(string $hex): array
@@ -1937,7 +1990,62 @@ class CardRenderingService
         */
 
         if ($field === 'student_name') {
-            return (string) $student->student_name;
+
+            /*
+            |--------------------------------------------------------------------------
+            | Student Name
+            |--------------------------------------------------------------------------
+            |
+            | The importer now builds student_name from:
+            |
+            |     first_name + last_name
+            |
+            | Therefore existing imported records normally already contain the
+            | complete name in the dedicated student_name column.
+            |
+            | The fallback below also supports older records where the dedicated
+            | student_name column may be empty but first_name / last_name are
+            | still available inside the JSON data column.
+            |
+            */
+
+            $studentName = trim(
+                (string) ($student->student_name ?? '')
+            );
+
+            if ($studentName !== '') {
+                return $studentName;
+            }
+
+            $data = is_array($student->data)
+                ? $student->data
+                : [];
+
+            $firstName = trim(
+                (string) (
+                    $data['first_name']
+                    ?? $data['firstname']
+                    ?? $data['First Name']
+                    ?? ''
+                )
+            );
+
+            $lastName = trim(
+                (string) (
+                    $data['last_name']
+                    ?? $data['lastname']
+                    ?? $data['Last Name']
+                    ?? ''
+                )
+            );
+
+            $combinedName = trim(
+                $firstName . ' ' . $lastName
+            );
+
+            return $combinedName !== ''
+                ? $combinedName
+                : null;
         }
 
 
