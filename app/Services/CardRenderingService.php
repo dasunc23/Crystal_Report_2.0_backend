@@ -185,6 +185,18 @@ class CardRenderingService
 
                 case 'student_name':
 
+                /*
+                |--------------------------------------------------------------------------
+                | NIC
+                |--------------------------------------------------------------------------
+                |
+                | Newer TemplateEditor versions may save NIC as its own element type
+                | (`nic`). It is still a normal dynamic text element, so it must use
+                | the same renderer as Student Name and other text fields.
+                |
+                */
+                case 'nic':
+
                     $this->drawTextElement(
                         $pdf,
                         $student,
@@ -1200,6 +1212,56 @@ class CardRenderingService
 
             /*
             |--------------------------------------------------------------------------
+            | Manufacture Date background box
+            |--------------------------------------------------------------------------
+            |
+            | Manufacture Date uses the same saved box settings as other text
+            | elements. This keeps the editor and PDF behaviour consistent.
+            |
+            */
+
+            $showBackground = filter_var(
+                $properties['show_background'] ?? false,
+                FILTER_VALIDATE_BOOLEAN
+            );
+
+            if ($showBackground) {
+
+                $backgroundColor = $this->hexToRgb(
+                    (string) ($properties['background_color'] ?? '#ffffff')
+                );
+
+                $opacity = $this->normaliseOpacity(
+                    $properties['opacity'] ?? 100
+                );
+
+                $this->setPdfAlpha(
+                    $pdf,
+                    $opacity
+                );
+
+                $pdf->SetFillColor(
+                    $backgroundColor[0],
+                    $backgroundColor[1],
+                    $backgroundColor[2]
+                );
+
+                $pdf->Rect(
+                    $x,
+                    $y,
+                    $width,
+                    $height,
+                    'F'
+                );
+
+                $this->setPdfAlpha(
+                    $pdf,
+                    1
+                );
+            }
+
+            /*
+            |--------------------------------------------------------------------------
             | Manufacture date - exact template box
             |--------------------------------------------------------------------------
             |
@@ -1308,10 +1370,24 @@ class CardRenderingService
             |--------------------------------------------------------------------------
             */
 
+            $opacity = $this->normaliseOpacity(
+                $properties['opacity'] ?? 100
+            );
+
+            $this->setPdfAlpha(
+                $pdf,
+                $opacity
+            );
+
             $pdf->Text(
                 $textX,
                 $textY,
                 $textValue
+            );
+
+            $this->setPdfAlpha(
+                $pdf,
+                1
             );
 
             /*
@@ -1335,10 +1411,57 @@ class CardRenderingService
         | Existing rendering for all other text elements
         |--------------------------------------------------------------------------
         |
-        | Keep the existing behaviour unchanged for student names, generic
-        | text and static text.
+        | Normal text elements use the exact X, Y, width and height saved by
+        | TemplateEditor. This includes Student Name, NIC, other Excel/JSON
+        | fields, Generic Text and Static Text.
+        |
+        | The saved text colour, background colour, background visibility and
+        | opacity are applied here so the PDF follows the template settings.
         |
         */
+
+        $showBackground = filter_var(
+            $properties['show_background'] ?? false,
+            FILTER_VALIDATE_BOOLEAN
+        );
+
+        $backgroundColor = $this->hexToRgb(
+            (string) ($properties['background_color'] ?? '#ffffff')
+        );
+
+        $opacity = $this->normaliseOpacity(
+            $properties['opacity'] ?? 100
+        );
+
+        $this->setPdfAlpha(
+            $pdf,
+            $opacity
+        );
+
+        $pdf->SetTextColor(
+            $textColor[0],
+            $textColor[1],
+            $textColor[2]
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Draw the saved background box when enabled.
+        |--------------------------------------------------------------------------
+        |
+        | show_background = false means the text is rendered directly over the
+        | template artwork. This allows NIC/static text to work both with and
+        | without a box.
+        |
+        */
+
+        if ($showBackground) {
+            $pdf->SetFillColor(
+                $backgroundColor[0],
+                $backgroundColor[1],
+                $backgroundColor[2]
+            );
+        }
 
         $pdf->SetXY(
             $x,
@@ -1350,20 +1473,79 @@ class CardRenderingService
             $height,
             (string) $value,
             0,
-            $alignment
+            0,
+            $alignment,
+            $showBackground
         );
 
         /*
         |--------------------------------------------------------------------------
-        | Reset text color
+        | Reset transparency and text colour.
         |--------------------------------------------------------------------------
         |
-        | Prevent this element's selected color from leaking into subsequent
-        | PDF elements.
+        | FPDF keeps these values as global PDF drawing state. Reset them so the
+        | selected colour/opacity of this element cannot affect later elements.
         |
         */
 
+        $this->setPdfAlpha(
+            $pdf,
+            1
+        );
+
         $pdf->SetTextColor(0, 0, 0);
+    }
+
+    /**
+     * Normalise a template opacity value to the 0.0 - 1.0 range used by
+     * transparency-capable FPDF implementations.
+     *
+     * TemplateEditor normally stores opacity as a percentage such as 100 or 50.
+     * Older data may contain a decimal value such as 1 or 0.5, so both forms are
+     * supported.
+     */
+    private function normaliseOpacity($opacity): float
+    {
+        if (!is_numeric($opacity)) {
+            return 1.0;
+        }
+
+        $opacity = (float) $opacity;
+
+        if ($opacity >= 0 && $opacity <= 1) {
+            return $opacity;
+        }
+
+        return max(
+            0.0,
+            min(
+                1.0,
+                $opacity / 100
+            )
+        );
+    }
+
+    /**
+     * Apply PDF transparency when the installed FPDF/FPDI implementation
+     * provides SetAlpha(). Some installations do not expose transparency;
+     * in that case this safely does nothing instead of breaking generation.
+     */
+    private function setPdfAlpha(
+        Fpdi $pdf,
+        float $alpha
+    ): void {
+
+        $alpha = max(
+            0.0,
+            min(
+                1.0,
+                $alpha
+            )
+        );
+
+        if (method_exists($pdf, 'SetAlpha')) {
+            $pdf->SetAlpha($alpha);
+        }
     }
 
     private function hexToRgb(string $hex): array
@@ -1838,6 +2020,54 @@ class CardRenderingService
  * a manufacture_date element, today's date is generated
  * automatically for every generated card.
  */
+    /**
+     * Normalise a data field key for case/spacing/hyphen-insensitive matching.
+     *
+     * Examples:
+     *     NIC          -> nic
+     *     Student ID   -> student_id
+     *     student-id   -> student_id
+     */
+    private function normaliseDataKey(string $key): string
+    {
+        $key = strtolower(trim($key));
+
+        $key = preg_replace(
+            '/[\s\-]+/',
+            '_',
+            $key
+        );
+
+        return trim((string) $key, '_');
+    }
+
+
+    /**
+     * Find a value inside the student's JSON data using a normalised key.
+     * The stored JSON data itself is not changed.
+     */
+    private function findDataValue(
+        array $data,
+        string $requestedKey
+    )
+    {
+        $normalisedRequestedKey = $this->normaliseDataKey(
+            $requestedKey
+        );
+
+        foreach ($data as $key => $value) {
+            if (
+                $this->normaliseDataKey((string) $key)
+                === $normalisedRequestedKey
+            ) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+
     private function resolveElementValue(
         StudentRecord $student,
         $element
@@ -1876,8 +2106,11 @@ class CardRenderingService
                     ? $element->properties
                     : [];
 
-            return isset($properties['text'])
-                ? (string) $properties['text']
+            $staticText = $element->text
+                ?? ($properties['text'] ?? null);
+
+            return $staticText !== null
+                ? (string) $staticText
                 : null;
         }
 
@@ -1923,6 +2156,10 @@ class CardRenderingService
                     'student_id_grid' => 'student_id',
 
                     'student_name' => 'student_name',
+
+                    // Support templates where NIC was saved as a dedicated
+                    // element type but no explicit field_name was stored.
+                    'nic' => 'nic',
 
                     default => null,
                 }
@@ -2075,9 +2312,21 @@ class CardRenderingService
                 ? $student->data
                 : [];
 
-        if (array_key_exists($field, $data)) {
-            return (string) $data[$field];
+        $extraValue = $this->findDataValue(
+            $data,
+            $field
+        );
+
+        if ($extraValue === null) {
+            return null;
         }
+
+        if (is_scalar($extraValue)) {
+            return (string) $extraValue;
+        }
+
+        // Do not render arrays/objects as the literal words "Array" or "Object".
+        return null;
 
 
         /*
