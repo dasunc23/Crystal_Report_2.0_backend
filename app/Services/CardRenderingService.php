@@ -1461,7 +1461,7 @@ class CardRenderingService
 
         $spacing = (float) (
             $properties['box_spacing']
-            ?? 1
+            ?? 0
         );
 
 
