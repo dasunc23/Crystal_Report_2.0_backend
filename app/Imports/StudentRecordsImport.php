@@ -59,7 +59,6 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
         $seenBarcodes = [];
 
         foreach ($rows as $index => $row) {
-
             /*
             |--------------------------------------------------------------------------
             | Convert the Excel row into a normal PHP array.
@@ -81,7 +80,6 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
 
             $data = $row->toArray();
 
-
             /*
             |--------------------------------------------------------------------------
             | Student ID
@@ -94,7 +92,6 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
             $studentId = isset($data['student_id'])
                 ? trim((string) $data['student_id'])
                 : '';
-
 
             /*
             |--------------------------------------------------------------------------
@@ -112,7 +109,6 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
             $studentName = isset($data['student_name'])
                 ? trim((string) $data['student_name'])
                 : '';
-
 
             /*
             |--------------------------------------------------------------------------
@@ -133,7 +129,6 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
                 ? trim((string) $data['first_name'])
                 : '';
 
-
             /*
             |--------------------------------------------------------------------------
             | Last Name
@@ -152,84 +147,6 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
             $lastName = isset($data['last_name'])
                 ? trim((string) $data['last_name'])
                 : '';
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | Build Student Name from First Name + Last Name.
-            |--------------------------------------------------------------------------
-            |
-            | If First Name and/or Last Name are supplied, they are combined
-            | with a single space.
-            |
-            | Examples:
-            |
-            | First Name = Mohamada Allam
-            | Last Name  = Rizvi
-            |
-            | Result:
-            |
-            | Mohamada Allam Rizvi
-            |
-            | This keeps the existing student_name database column populated
-            | while also preserving first_name and last_name separately.
-            |
-            */
-
-            if ($firstName !== '' || $lastName !== '') {
-
-                $combinedName = trim(
-                    $firstName . ' ' . $lastName
-                );
-
-                /*
-                |--------------------------------------------------------------------------
-                | Use the combined name as the main student name.
-                |--------------------------------------------------------------------------
-                |
-                | This means the new First Name + Last Name Excel structure
-                | automatically works with the existing student_name field.
-                |
-                */
-
-                $studentName = $combinedName;
-            }
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | Validate identifying student information.
-            |--------------------------------------------------------------------------
-            |
-            | A row is considered valid when it has at least one of:
-            |
-            | - Student ID
-            | - Student Name
-            | - First Name
-            | - Last Name
-            |
-            | This preserves the old student_name/student_id behavior while
-            | allowing the new First Name + Last Name format.
-            |
-            */
-
-            if (
-                $studentId === ''
-                && $studentName === ''
-                && $firstName === ''
-                && $lastName === ''
-            ) {
-
-                $this->skippedCount++;
-
-                $this->rowErrors[] = [
-                    'row' => $index + 2,
-                    'reason' => 'Student name, first name, last name, or student ID is required.',
-                ];
-
-                continue;
-            }
-
 
             /*
             |--------------------------------------------------------------------------
@@ -256,6 +173,80 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
                 $barcode = null;
             }
 
+            /*
+            |--------------------------------------------------------------------------
+            | Build Student Name from First Name + Last Name.
+            |--------------------------------------------------------------------------
+            |
+            | If First Name and/or Last Name are supplied, they are combined
+            | with a single space.
+            |
+            | Examples:
+            |
+            | First Name = Mohamada Allam
+            | Last Name  = Rizvi
+            |
+            | Result:
+            |
+            | Mohamada Allam Rizvi
+            |
+            | This keeps the existing student_name database column populated
+            | while also preserving first_name and last_name separately.
+            |
+            */
+
+            if ($firstName !== '' || $lastName !== '') {
+                $combinedName = trim(
+                    $firstName . ' ' . $lastName
+                );
+
+                /*
+                |--------------------------------------------------------------------------
+                | Use the combined name as the main student name.
+                |--------------------------------------------------------------------------
+                |
+                | This means the new First Name + Last Name Excel structure
+                | automatically works with the existing student_name field.
+                |
+                */
+
+                $studentName = $combinedName;
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Validate identifying student information.
+            |--------------------------------------------------------------------------
+            |
+            | A row is considered valid when it has at least one of:
+            |
+            | - Barcode
+            | - Student ID
+            | - Student Name
+            | - First Name
+            | - Last Name
+            |
+            | Barcode is included because some templates only require
+            | barcode data.
+            |
+            */
+
+            if (
+                $barcode === null
+                && $studentId === ''
+                && $studentName === ''
+                && $firstName === ''
+                && $lastName === ''
+            ) {
+                $this->skippedCount++;
+
+                $this->rowErrors[] = [
+                    'row' => $index + 2,
+                    'reason' => 'Student name, first name, last name, student ID, or barcode is required.',
+                ];
+
+                continue;
+            }
 
             /*
             |--------------------------------------------------------------------------
@@ -270,7 +261,6 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
                 $barcode !== null
                 && isset($seenBarcodes[$barcode])
             ) {
-
                 $this->skippedCount++;
 
                 $this->rowErrors[] = [
@@ -282,7 +272,6 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
                 continue;
             }
 
-
             /*
             |--------------------------------------------------------------------------
             | Remember this barcode for the current upload.
@@ -292,7 +281,6 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
             if ($barcode !== null) {
                 $seenBarcodes[$barcode] = true;
             }
-
 
             /*
             |--------------------------------------------------------------------------
@@ -315,7 +303,6 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
             */
 
             $extraData = $data;
-
 
             /*
             |--------------------------------------------------------------------------
@@ -347,7 +334,6 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
                 $extraData['student_name']
             );
 
-
             /*
             |--------------------------------------------------------------------------
             | Make sure First Name and Last Name remain available in JSON.
@@ -373,7 +359,6 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
                 unset($extraData['last_name']);
             }
 
-
             /*
             |--------------------------------------------------------------------------
             | Process the student record.
@@ -387,7 +372,6 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
             */
 
             try {
-
                 $student = $barcode === null
                     ? null
                     : StudentRecord::where(
@@ -400,7 +384,6 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
                         )
                         ->first();
 
-
                 /*
                 |--------------------------------------------------------------------------
                 | Update existing student.
@@ -408,7 +391,6 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
                 */
 
                 if ($student) {
-
                     $student->update([
                         'student_id' => $studentId !== ''
                             ? $studentId
@@ -425,7 +407,6 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
 
                     continue;
                 }
-
 
                 /*
                 |--------------------------------------------------------------------------
@@ -450,9 +431,7 @@ class StudentRecordsImport implements ToCollection, WithHeadingRow
                 ]);
 
                 $this->importedCount++;
-
             } catch (\Throwable $exception) {
-
                 /*
                 |--------------------------------------------------------------------------
                 | Record row-level import failure.
