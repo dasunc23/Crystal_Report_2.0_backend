@@ -919,7 +919,7 @@ class CardRenderingService
 
         $sidePaddingRatio = 0.045; // 4.5% of barcode-box width
         $topPaddingRatio = 0.10;    // 10% of barcode-box height
-        $gapRatio = 0.075;          // 7.5% gap before number
+        $gapRatio = 0.025;          // 2.5% gap before number
         $numberAreaRatio = 0.20;    // 20% reserved for number
 
         $sidePadding = max(
@@ -1238,7 +1238,7 @@ class CardRenderingService
 
             $fontSize = max(
                 4,
-                (float) ($properties['text_size'] ?? 5.5)
+                (float) ($properties['text_size'] ?? 12)
             );
 
             $pdf->SetFont(
@@ -1269,14 +1269,17 @@ class CardRenderingService
                 )
             );
 
-            /*
-            | Baseline is calculated from the physical bottom of the barcode box.
-            | This keeps the number aligned even when the element height changes.
-            */
-            $textY =
+            $barcodeBottom =
                 $y
-                + $height
-                - 0.8;
+                + $topPadding
+                + $barcodeRenderHeight;
+
+            $fontHeightMm = $fontSize * 0.3528;
+
+            $textY =
+                $barcodeBottom
+                + 1.2
+                + ($fontHeightMm * 0.55);
 
             $pdf->Text(
                 $textX,
