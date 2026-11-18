@@ -1238,7 +1238,7 @@ class CardRenderingService
 
             $fontSize = max(
                 4,
-                (float) ($properties['text_size'] ?? 12)
+                (float) ($properties['text_size'] ?? 8)
             );
 
             $pdf->SetFont(
